@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import { getAuthUserId, requireAuth } from '@/lib/auth-helpers';
 
-// GET /api/whatsapp-templates - List all WhatsApp templates with filters
+// GET /api/whatsapp-templates - List all WhatsApp templates (public, no auth needed for read)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -29,9 +30,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/whatsapp-templates - Create a new WhatsApp template
+// POST /api/whatsapp-templates - Create a new WhatsApp template (requires auth)
 export async function POST(request: NextRequest) {
   try {
+    const userId = await requireAuth();
     const body = await request.json();
     const { name, category, formalText, friendlyText, briefText, isActive } = body;
 
@@ -55,6 +57,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(template, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error creating WhatsApp template:', error);
     return NextResponse.json(
       { error: 'Failed to create WhatsApp template' },

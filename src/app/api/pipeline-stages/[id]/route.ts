@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-helpers';
 
 // PUT /api/pipeline-stages/[id] - Update a pipeline stage
 export async function PUT(
@@ -7,6 +8,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireAuth();
     const { id } = await params;
     const body = await request.json();
 
@@ -16,6 +18,10 @@ export async function PUT(
         { error: 'Pipeline stage not found' },
         { status: 404 }
       );
+    }
+
+    if (existing.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
     const stage = await db.pipelineStage.update({
@@ -34,6 +40,9 @@ export async function PUT(
 
     return NextResponse.json(stage);
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error updating pipeline stage:', error);
     return NextResponse.json(
       { error: 'Failed to update pipeline stage' },
@@ -48,6 +57,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireAuth();
     const { id } = await params;
 
     const existing = await db.pipelineStage.findUnique({ where: { id } });
@@ -56,6 +66,10 @@ export async function DELETE(
         { error: 'Pipeline stage not found' },
         { status: 404 }
       );
+    }
+
+    if (existing.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
     // Check if there are leads in this stage
@@ -71,6 +85,9 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Pipeline stage deleted successfully' });
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error deleting pipeline stage:', error);
     return NextResponse.json(
       { error: 'Failed to delete pipeline stage' },

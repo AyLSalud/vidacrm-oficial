@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import bcrypt from 'bcryptjs';
 
-// POST /api/seed - Seed the database with example data
+// POST /api/seed - Seed the database with example data (includes admin user)
 export async function POST() {
   try {
     // Clean existing data (order matters due to foreign keys)
@@ -11,13 +12,34 @@ export async function POST() {
     await db.pipelineStage.deleteMany();
     await db.whatsAppTemplate.deleteMany();
     await db.aIPrompt.deleteMany();
+    await db.dailyMetric.deleteMany();
+    await db.session.deleteMany();
+    await db.account.deleteMany();
+    await db.user.deleteMany();
 
     // ========================================
-    // 1. PIPELINE STAGES
+    // 1. ADMIN USER
+    // ========================================
+    const hashedPassword = await bcrypt.hash('admin123', 12);
+    const adminUser = await db.user.create({
+      data: {
+        name: 'Admin VidaCRM',
+        email: 'admin@vidacrm.com',
+        password: hashedPassword,
+        role: 'admin',
+        isActive: true,
+      },
+    });
+
+    const userId = adminUser.id;
+
+    // ========================================
+    // 2. PIPELINE STAGES (for admin user)
     // ========================================
     const stages = await db.$transaction([
       db.pipelineStage.create({
         data: {
+          userId,
           name: 'Nuevo Lead',
           order: 1,
           color: '#3b82f6',
@@ -30,6 +52,7 @@ export async function POST() {
       }),
       db.pipelineStage.create({
         data: {
+          userId,
           name: 'Contactado',
           order: 2,
           color: '#8b5cf6',
@@ -42,6 +65,7 @@ export async function POST() {
       }),
       db.pipelineStage.create({
         data: {
+          userId,
           name: 'Conversación Iniciada',
           order: 3,
           color: '#f59e0b',
@@ -54,6 +78,7 @@ export async function POST() {
       }),
       db.pipelineStage.create({
         data: {
+          userId,
           name: 'Datos Solicitados',
           order: 4,
           color: '#06b6d4',
@@ -66,6 +91,7 @@ export async function POST() {
       }),
       db.pipelineStage.create({
         data: {
+          userId,
           name: 'Propuesta Enviada',
           order: 5,
           color: '#f97316',
@@ -78,6 +104,7 @@ export async function POST() {
       }),
       db.pipelineStage.create({
         data: {
+          userId,
           name: 'Negociación',
           order: 6,
           color: '#ec4899',
@@ -90,6 +117,7 @@ export async function POST() {
       }),
       db.pipelineStage.create({
         data: {
+          userId,
           name: 'Cerrado Ganado',
           order: 7,
           color: '#22c55e',
@@ -102,6 +130,7 @@ export async function POST() {
       }),
       db.pipelineStage.create({
         data: {
+          userId,
           name: 'Cerrado Perdido',
           order: 8,
           color: '#ef4444',
@@ -126,7 +155,7 @@ export async function POST() {
     ] = stages;
 
     // ========================================
-    // 2. EXAMPLE LEADS
+    // 3. EXAMPLE LEADS (for admin user)
     // ========================================
     const now = new Date();
     const daysAgo = (days: number) => {
@@ -149,6 +178,7 @@ export async function POST() {
       // Lead 1: María en Nuevo Lead
       db.lead.create({
         data: {
+          userId,
           firstName: 'María',
           lastName: 'González',
           phone: '+5491112345678',
@@ -171,6 +201,7 @@ export async function POST() {
       // Lead 2: Juan en Contactado
       db.lead.create({
         data: {
+          userId,
           firstName: 'Juan',
           lastName: 'Pérez',
           phone: '+5491198765432',
@@ -193,6 +224,7 @@ export async function POST() {
       // Lead 3: Valentina en Conversación Iniciada
       db.lead.create({
         data: {
+          userId,
           firstName: 'Valentina',
           lastName: 'Rodríguez',
           phone: '+5491155667788',
@@ -215,6 +247,7 @@ export async function POST() {
       // Lead 4: Carlos en Datos Solicitados
       db.lead.create({
         data: {
+          userId,
           firstName: 'Carlos',
           lastName: 'Martínez',
           phone: '+5491144332211',
@@ -237,6 +270,7 @@ export async function POST() {
       // Lead 5: Lucía en Propuesta Enviada
       db.lead.create({
         data: {
+          userId,
           firstName: 'Lucía',
           lastName: 'Fernández',
           phone: '+5491177889900',
@@ -259,6 +293,7 @@ export async function POST() {
       // Lead 6: Roberto en Negociación
       db.lead.create({
         data: {
+          userId,
           firstName: 'Roberto',
           lastName: 'López',
           phone: '+5491166554433',
@@ -281,6 +316,7 @@ export async function POST() {
       // Lead 7: Ana en Cerrado Ganado
       db.lead.create({
         data: {
+          userId,
           firstName: 'Ana',
           lastName: 'Sánchez',
           phone: '+5491133221100',
@@ -303,6 +339,7 @@ export async function POST() {
       // Lead 8: Diego en Cerrado Perdido
       db.lead.create({
         data: {
+          userId,
           firstName: 'Diego',
           lastName: 'Torres',
           phone: '+5491199887766',
@@ -326,12 +363,12 @@ export async function POST() {
     const [maria, juan, valentina, carlos, lucia, roberto, ana, diego] = leads;
 
     // ========================================
-    // 3. TASKS
+    // 4. TASKS (for admin user)
     // ========================================
     await db.$transaction([
-      // Task for María - follow up tomorrow
       db.task.create({
         data: {
+          userId,
           leadId: maria.id,
           title: 'Enviar mensaje de bienvenida',
           description: 'Usar template de primer contacto para María González',
@@ -340,9 +377,9 @@ export async function POST() {
           completed: false,
         },
       }),
-      // Task for Juan - call today
       db.task.create({
         data: {
+          userId,
           leadId: juan.id,
           title: 'Llamar a Juan para entender necesidades',
           description: 'Preguntar por qué quiere dejar OSDE y qué busca en el nuevo plan',
@@ -351,9 +388,9 @@ export async function POST() {
           completed: false,
         },
       }),
-      // Task for Juan - send info (completed)
       db.task.create({
         data: {
+          userId,
           leadId: juan.id,
           title: 'Enviar info Plan 2100',
           description: 'Enviar PDF con beneficios del Plan 2100',
@@ -363,9 +400,9 @@ export async function POST() {
           completedAt: daysAgo(1),
         },
       }),
-      // Task for Carlos - request missing data
       db.task.create({
         data: {
+          userId,
           leadId: carlos.id,
           title: 'Solicitar datos de la esposa',
           description: 'Necesitamos edad y DNI de la esposa para completar la cotización',
@@ -374,9 +411,9 @@ export async function POST() {
           completed: false,
         },
       }),
-      // Task for Lucía - follow up on proposal (overdue)
       db.task.create({
         data: {
+          userId,
           leadId: lucia.id,
           title: 'Seguimiento post-propuesta',
           description: 'Llamar a Lucía para ver si revisó la propuesta',
@@ -385,9 +422,9 @@ export async function POST() {
           completed: false,
         },
       }),
-      // Task for Roberto - schedule meeting
       db.task.create({
         data: {
+          userId,
           leadId: roberto.id,
           title: 'Agendar reunión para negociar',
           description: 'Coordinar videollamada para discutir opciones de descuento grupal',
@@ -396,9 +433,9 @@ export async function POST() {
           completed: false,
         },
       }),
-      // Task for Ana - send confirmation (completed)
       db.task.create({
         data: {
+          userId,
           leadId: ana.id,
           title: 'Enviar confirmación de afiliación',
           description: 'Enviar email con confirmación y datos de bienvenida al Plan 3100',
@@ -411,12 +448,12 @@ export async function POST() {
     ]);
 
     // ========================================
-    // 4. INTERACTIONS
+    // 5. INTERACTIONS (for admin user)
     // ========================================
     await db.$transaction([
-      // María - creation
       db.interaction.create({
         data: {
+          userId,
           leadId: maria.id,
           type: 'note',
           content: 'Lead creado: María González',
@@ -424,9 +461,9 @@ export async function POST() {
           createdAt: hoursAgo(2),
         },
       }),
-      // Juan - creation and WhatsApp sent
       db.interaction.create({
         data: {
+          userId,
           leadId: juan.id,
           type: 'note',
           content: 'Lead creado: Juan Pérez',
@@ -436,6 +473,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: juan.id,
           type: 'whatsapp_sent',
           content: 'Mensaje de primer contacto enviado',
@@ -445,6 +483,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: juan.id,
           type: 'whatsapp_received',
           content: 'Juan responde: "Hola, sí, quiero info sobre los planes"',
@@ -454,6 +493,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: juan.id,
           type: 'stage_change',
           content: 'Etapa cambiada: Nuevo Lead → Contactado',
@@ -461,9 +501,9 @@ export async function POST() {
           createdAt: daysAgo(1),
         },
       }),
-      // Valentina - creation and conversations
       db.interaction.create({
         data: {
+          userId,
           leadId: valentina.id,
           type: 'note',
           content: 'Lead creado: Valentina Rodríguez',
@@ -473,6 +513,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: valentina.id,
           type: 'whatsapp_sent',
           content: 'Mensaje de primer contacto enviado por Instagram',
@@ -482,6 +523,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: valentina.id,
           type: 'whatsapp_received',
           content: 'Valentina: "Hola! Quería info sobre planes familiares"',
@@ -491,6 +533,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: valentina.id,
           type: 'stage_change',
           content: 'Etapa cambiada: Contactado → Conversación Iniciada',
@@ -500,6 +543,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: valentina.id,
           type: 'whatsapp_sent',
           content: 'Se enviaron detalles del Plan 4100 con cobertura familiar',
@@ -509,6 +553,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: valentina.id,
           type: 'whatsapp_received',
           content: 'Valentina: "Me interesa, pero quiero saber si incluyen las clinics de Belgrano"',
@@ -516,9 +561,9 @@ export async function POST() {
           createdAt: daysAgo(2),
         },
       }),
-      // Carlos - creation and data request
       db.interaction.create({
         data: {
+          userId,
           leadId: carlos.id,
           type: 'note',
           content: 'Lead creado: Carlos Martínez (referido por Juan Pérez)',
@@ -528,6 +573,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: carlos.id,
           type: 'stage_change',
           content: 'Etapa cambiada: Nuevo Lead → Datos Solicitados',
@@ -537,6 +583,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: carlos.id,
           type: 'whatsapp_sent',
           content: 'Se solicitaron datos de grupo familiar para cotización',
@@ -544,9 +591,9 @@ export async function POST() {
           createdAt: daysAgo(1),
         },
       }),
-      // Lucía - creation and proposal
       db.interaction.create({
         data: {
+          userId,
           leadId: lucia.id,
           type: 'note',
           content: 'Lead creado: Lucía Fernández',
@@ -556,6 +603,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: lucia.id,
           type: 'stage_change',
           content: 'Etapa cambiada: Datos Solicitados → Propuesta Enviada',
@@ -565,6 +613,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: lucia.id,
           type: 'email',
           content: 'Propuesta enviada: Plan 2100 individual - $85.000/mes',
@@ -572,9 +621,9 @@ export async function POST() {
           createdAt: daysAgo(3),
         },
       }),
-      // Roberto - creation and negotiation
       db.interaction.create({
         data: {
+          userId,
           leadId: roberto.id,
           type: 'note',
           content: 'Lead creado: Roberto López',
@@ -584,6 +633,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: roberto.id,
           type: 'stage_change',
           content: 'Etapa cambiada: Propuesta Enviada → Negociación',
@@ -593,6 +643,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: roberto.id,
           type: 'whatsapp_received',
           content: 'Roberto: "El precio está alto para 4 personas. ¿No hay descuento grupal?"',
@@ -602,6 +653,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: roberto.id,
           type: 'call',
           content: 'Llamada con Roberto - discutió opciones de descuento por grupo familiar',
@@ -609,9 +661,9 @@ export async function POST() {
           createdAt: daysAgo(1),
         },
       }),
-      // Ana - creation and won
       db.interaction.create({
         data: {
+          userId,
           leadId: ana.id,
           type: 'note',
           content: 'Lead creado: Ana Sánchez',
@@ -621,6 +673,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: ana.id,
           type: 'stage_change',
           content: 'Etapa cambiada: Negociación → Cerrado Ganado',
@@ -630,6 +683,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: ana.id,
           type: 'task_completed',
           content: 'Tarea completada: Enviar confirmación de afiliación',
@@ -637,9 +691,9 @@ export async function POST() {
           createdAt: daysAgo(4),
         },
       }),
-      // Diego - creation and lost
       db.interaction.create({
         data: {
+          userId,
           leadId: diego.id,
           type: 'note',
           content: 'Lead creado: Diego Torres',
@@ -649,6 +703,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: diego.id,
           type: 'stage_change',
           content: 'Etapa cambiada: Propuesta Enviada → Cerrado Perdido',
@@ -658,6 +713,7 @@ export async function POST() {
       }),
       db.interaction.create({
         data: {
+          userId,
           leadId: diego.id,
           type: 'whatsapp_received',
           content: 'Diego: "Gracias, pero es muy caro. Me quedo con OSDE"',
@@ -668,7 +724,7 @@ export async function POST() {
     ]);
 
     // ========================================
-    // 5. WHATSAPP TEMPLATES
+    // 6. WHATSAPP TEMPLATES (global, no userId)
     // ========================================
     await db.$transaction([
       db.whatsAppTemplate.create({
@@ -764,7 +820,7 @@ export async function POST() {
     ]);
 
     // ========================================
-    // 6. AI PROMPTS
+    // 7. AI PROMPTS (global, no userId)
     // ========================================
     await db.$transaction([
       db.aIPrompt.create({
@@ -817,6 +873,12 @@ export async function POST() {
     return NextResponse.json({
       message: 'Database seeded successfully',
       data: {
+        user: {
+          id: adminUser.id,
+          name: adminUser.name,
+          email: adminUser.email,
+          role: adminUser.role,
+        },
         pipelineStages: stages.length,
         leads: leads.length,
         tasks: 7,

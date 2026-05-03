@@ -25,3 +25,34 @@ Stage Summary:
 - AI prompts library with 5 pre-built prompts + variable filling
 - Web forms with floating WhatsApp button generator
 - All data seeded with realistic Argentine health plan sales data
+
+---
+Task ID: 14-20
+Agent: Main Orchestrator + Subagents
+Task: Add multi-user authentication with NextAuth.js v4
+
+Work Log:
+- Updated Prisma schema: User model with password, Account/Session/VerificationToken for NextAuth, userId on all user-scoped models
+- Installed bcryptjs for password hashing
+- Created /src/lib/auth.ts - NextAuth config with Credentials provider, bcrypt password verification, JWT strategy
+- Created /src/lib/auth-helpers.ts - requireAuth() and getAuthUserId() helpers
+- Created /src/app/api/auth/[...nextauth]/route.ts - NextAuth route handler
+- Created /src/app/api/auth/register/route.ts - User registration with auto-pipeline creation
+- Created /src/app/api/auth/me/route.ts - Current user info endpoint
+- Updated 13 API routes with auth: userId filtering, ownership verification, 401 responses
+- Updated /src/components/crm/providers.tsx - Added SessionProvider from next-auth/react
+- Created /src/components/crm/auth-page.tsx - Login/Register UI with tabs, demo credentials hint
+- Updated /src/app/page.tsx - Shows auth page when not logged in, shows user info + logout when logged in
+- Updated /src/app/api/seed/route.ts - Creates admin user with bcrypt password
+- Seeded database via direct script: admin user, 8 stages, 8 leads, 5 tasks, 5 interactions, 9 WhatsApp templates, 5 AI prompts
+- Updated .env with NEXTAUTH_SECRET and NEXTAUTH_URL
+
+Stage Summary:
+- Full multi-user authentication operational
+- Login: admin@vidacrm.com / admin123
+- New users can register and get auto-provisioned pipeline stages
+- Each user sees only their own data (leads, tasks, interactions, pipeline stages)
+- WhatsApp templates and AI prompts are shared globally
+- Session management via JWT with 30-day expiry
+- User avatar with initials, dropdown menu with logout
+- Demo credentials shown on login page

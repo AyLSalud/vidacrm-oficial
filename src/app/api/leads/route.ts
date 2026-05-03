@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import { requireAuth } from '@/lib/auth-helpers';
 
-// GET /api/leads - List all leads with optional filters
+// GET /api/leads - List all leads for the authenticated user with optional filters
 export async function GET(request: NextRequest) {
   try {
+    const userId = await requireAuth();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const pipelineStageId = searchParams.get('pipelineStageId');
@@ -12,7 +14,7 @@ export async function GET(request: NextRequest) {
     const channel = searchParams.get('channel');
     const search = searchParams.get('search');
 
-    const where: Prisma.LeadWhereInput = {};
+    const where: Prisma.LeadWhereInput = { userId };
 
     if (status) where.status = status;
     if (pipelineStageId) where.pipelineStageId = pipelineStageId;
@@ -38,6 +40,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(leads);
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error fetching leads:', error);
     return NextResponse.json(
       { error: 'Failed to fetch leads' },
@@ -49,6 +54,7 @@ export async function GET(request: NextRequest) {
 // POST /api/leads - Create a new lead
 export async function POST(request: NextRequest) {
   try {
+    const userId = await requireAuth();
     const body = await request.json();
     const {
       firstName,
@@ -75,6 +81,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify the pipeline stage belongs to the user
+    const pipelineStage = await db.pipelineStage.findUnique({
+      where: { id: pipelineStageId },
+    });
+    if (!pipelineStage || pipelineStage.userId !== userId) {
+      return NextResponse.json(
+        { error: 'Pipeline stage not found or not owned by user' },
+        { status: 400 }
+      );
+    }
+
     const lead = await db.lead.create({
       data: {
         firstName,
@@ -93,6 +110,7 @@ export async function POST(request: NextRequest) {
         lastContact: new Date(),
         nextFollowUp: nextFollowUp ? new Date(nextFollowUp) : null,
         notes,
+        userId,
       },
       include: {
         pipelineStage: true,
@@ -106,11 +124,15 @@ export async function POST(request: NextRequest) {
         type: 'note',
         content: `Lead creado: ${firstName}${lastName ? ' ' + lastName : ''}`,
         metadata: JSON.stringify({ action: 'lead_created' }),
+        userId,
       },
     });
 
     return NextResponse.json(lead, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error creating lead:', error);
     return NextResponse.json(
       { error: 'Failed to create lead' },

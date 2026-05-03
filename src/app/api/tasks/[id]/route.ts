@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-helpers';
 
 // PUT /api/tasks/[id] - Update a task
 export async function PUT(
@@ -7,6 +8,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireAuth();
     const { id } = await params;
     const body = await request.json();
 
@@ -19,6 +21,10 @@ export async function PUT(
         { error: 'Task not found' },
         { status: 404 }
       );
+    }
+
+    if (existing.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
     // If completing the task, set completedAt and create an interaction
@@ -58,12 +64,16 @@ export async function PUT(
             taskTitle: existing.title,
             taskType: existing.type,
           }),
+          userId,
         },
       });
     }
 
     return NextResponse.json(task);
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error updating task:', error);
     return NextResponse.json(
       { error: 'Failed to update task' },
@@ -78,6 +88,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireAuth();
     const { id } = await params;
 
     const existing = await db.task.findUnique({ where: { id } });
@@ -88,10 +99,17 @@ export async function DELETE(
       );
     }
 
+    if (existing.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
     await db.task.delete({ where: { id } });
 
     return NextResponse.json({ message: 'Task deleted successfully' });
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error deleting task:', error);
     return NextResponse.json(
       { error: 'Failed to delete task' },

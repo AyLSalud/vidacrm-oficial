@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-helpers';
 
 // GET /api/leads/[id] - Get single lead with pipelineStage, tasks, and interactions
 export async function GET(
@@ -7,6 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireAuth();
     const { id } = await params;
 
     const lead = await db.lead.findUnique({
@@ -29,8 +31,15 @@ export async function GET(
       );
     }
 
+    if (lead.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
     return NextResponse.json(lead);
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error fetching lead:', error);
     return NextResponse.json(
       { error: 'Failed to fetch lead' },
@@ -45,6 +54,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireAuth();
     const { id } = await params;
     const body = await request.json();
 
@@ -59,11 +69,22 @@ export async function PUT(
       );
     }
 
-    // If pipelineStageId changes, create a stage_change interaction
+    if (existing.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    // If pipelineStageId changes, verify the new stage belongs to the user
     if (body.pipelineStageId && body.pipelineStageId !== existing.pipelineStageId) {
       const newStage = await db.pipelineStage.findUnique({
         where: { id: body.pipelineStageId },
       });
+
+      if (!newStage || newStage.userId !== userId) {
+        return NextResponse.json(
+          { error: 'Target pipeline stage not found or not owned by user' },
+          { status: 400 }
+        );
+      }
 
       await db.interaction.create({
         data: {
@@ -76,6 +97,7 @@ export async function PUT(
             toStageId: body.pipelineStageId,
             toStageName: newStage?.name || 'Desconocido',
           }),
+          userId,
         },
       });
     }
@@ -115,6 +137,9 @@ export async function PUT(
 
     return NextResponse.json(lead);
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error updating lead:', error);
     return NextResponse.json(
       { error: 'Failed to update lead' },
@@ -129,6 +154,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireAuth();
     const { id } = await params;
 
     const existing = await db.lead.findUnique({ where: { id } });
@@ -139,10 +165,17 @@ export async function DELETE(
       );
     }
 
+    if (existing.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
     await db.lead.delete({ where: { id } });
 
     return NextResponse.json({ message: 'Lead deleted successfully' });
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error deleting lead:', error);
     return NextResponse.json(
       { error: 'Failed to delete lead' },

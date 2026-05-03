@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-helpers';
 
 // PUT /api/leads/[id]/move - Move a lead to a different pipeline stage
 export async function PUT(
@@ -7,6 +8,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await requireAuth();
     const { id } = await params;
     const body = await request.json();
     const { pipelineStageId } = body;
@@ -29,6 +31,10 @@ export async function PUT(
       );
     }
 
+    if (existing.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
     if (existing.pipelineStageId === pipelineStageId) {
       return NextResponse.json(
         { error: 'Lead is already in this stage' },
@@ -43,6 +49,13 @@ export async function PUT(
       return NextResponse.json(
         { error: 'Target pipeline stage not found' },
         { status: 404 }
+      );
+    }
+
+    if (newStage.userId !== userId) {
+      return NextResponse.json(
+        { error: 'Target pipeline stage not owned by user' },
+        { status: 400 }
       );
     }
 
@@ -69,12 +82,16 @@ export async function PUT(
             toStageId: pipelineStageId,
             toStageName: newStage.name,
           }),
+          userId,
         },
       }),
     ]);
 
     return NextResponse.json(lead);
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error moving lead:', error);
     return NextResponse.json(
       { error: 'Failed to move lead' },

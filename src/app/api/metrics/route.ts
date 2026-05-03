@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth } from '@/lib/auth-helpers';
 
-// GET /api/metrics - Return computed metrics from the database
+// GET /api/metrics - Return computed metrics for the authenticated user
 export async function GET() {
   try {
+    const userId = await requireAuth();
+
     // Total leads by status
     const leadsByStatus = await db.lead.groupBy({
       by: ['status'],
       _count: { id: true },
+      where: { userId },
     });
 
     const leadsByStatusFormatted = leadsByStatus.map((item) => ({
@@ -17,6 +21,7 @@ export async function GET() {
 
     // Leads by pipeline stage
     const leadsByStage = await db.lead.findMany({
+      where: { userId },
       select: {
         pipelineStageId: true,
         pipelineStage: {
@@ -45,6 +50,7 @@ export async function GET() {
     const leadsByChannel = await db.lead.groupBy({
       by: ['channel'],
       _count: { id: true },
+      where: { userId },
     });
 
     const leadsByChannelFormatted = leadsByChannel.map((item) => ({
@@ -53,19 +59,20 @@ export async function GET() {
     }));
 
     // Conversion rate (won / total)
-    const totalLeads = await db.lead.count();
-    const wonLeads = await db.lead.count({ where: { status: 'won' } });
+    const totalLeads = await db.lead.count({ where: { userId } });
+    const wonLeads = await db.lead.count({ where: { userId, status: 'won' } });
     const conversionRate = totalLeads > 0 ? (wonLeads / totalLeads) : 0;
 
     // Tasks completed vs pending
-    const tasksCompleted = await db.task.count({ where: { completed: true } });
-    const tasksPending = await db.task.count({ where: { completed: false } });
+    const tasksCompleted = await db.task.count({ where: { userId, completed: true } });
+    const tasksPending = await db.task.count({ where: { userId, completed: false } });
 
     // Recent leads (last 7 days)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const recentLeads = await db.lead.count({
       where: {
+        userId,
         createdAt: { gte: sevenDaysAgo },
       },
     });
@@ -73,6 +80,7 @@ export async function GET() {
     // Overdue follow-ups (nextFollowUp < now AND status = active)
     const overdueFollowUps = await db.lead.count({
       where: {
+        userId,
         nextFollowUp: { lt: new Date() },
         status: 'active',
       },
@@ -82,6 +90,7 @@ export async function GET() {
     const leadsByPriority = await db.lead.groupBy({
       by: ['priority'],
       _count: { id: true },
+      where: { userId },
     });
 
     const leadsByPriorityFormatted = leadsByPriority.map((item) => ({
@@ -104,6 +113,9 @@ export async function GET() {
       totalLeads,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error computing metrics:', error);
     return NextResponse.json(
       { error: 'Failed to compute metrics' },

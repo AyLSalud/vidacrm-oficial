@@ -1,5 +1,6 @@
 'use client'
 
+import { useSession, signOut } from 'next-auth/react'
 import { useCRMStore, type ViewMode } from '@/store/crm-store'
 import { PipelineView } from '@/components/crm/pipeline-view'
 import { LeadListView } from '@/components/crm/lead-list-view'
@@ -10,6 +11,7 @@ import { AIAssistantView } from '@/components/crm/ai-assistant-view'
 import { FormsView } from '@/components/crm/forms-view'
 import { LeadDetailDrawer } from '@/components/crm/lead-detail-drawer'
 import { LeadCreateDialog } from '@/components/crm/lead-create-dialog'
+import { AuthPage } from '@/components/crm/auth-page'
 import {
   LayoutGrid,
   List,
@@ -21,15 +23,22 @@ import {
   Plus,
   Heart,
   Menu,
-  X,
-  Search,
-  Bell,
+  LogOut,
+  Settings,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useIsMobile } from '@/hooks/use-mobile'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
 const navItems: { key: ViewMode; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: 'pipeline', label: 'Pipeline', icon: LayoutGrid },
@@ -41,7 +50,33 @@ const navItems: { key: ViewMode; label: string; icon: React.ComponentType<{ clas
   { key: 'forms', label: 'Formularios', icon: FileText },
 ]
 
-function SidebarContent({ activeView, setActiveView, onClose }: { activeView: ViewMode; setActiveView: (v: ViewMode) => void; onClose?: () => void }) {
+function UserAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' }) {
+  const initials = name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+  const sizeClass = size === 'md' ? 'size-9' : 'size-8'
+  const textClass = size === 'md' ? 'text-sm' : 'text-xs'
+  return (
+    <Avatar className={sizeClass}>
+      <AvatarFallback className="bg-emerald-100 text-emerald-700 font-semibold text-xs">
+        {initials}
+      </AvatarFallback>
+    </Avatar>
+  )
+}
+
+function SidebarContent({ activeView, setActiveView, onClose, session }: {
+  activeView: ViewMode
+  setActiveView: (v: ViewMode) => void
+  onClose?: () => void
+  session: any
+}) {
+  const userName = session?.user?.name || 'Usuario'
+  const userEmail = session?.user?.email || ''
+
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -100,16 +135,34 @@ function SidebarContent({ activeView, setActiveView, onClose }: { activeView: Vi
         })}
       </nav>
 
-      {/* Footer */}
+      {/* User Footer */}
       <div className="px-3 py-4 border-t border-gray-200">
         <div className="flex items-center gap-2.5 px-2">
-          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-            <span className="text-sm font-semibold text-emerald-700">V</span>
-          </div>
+          <UserAvatar name={userName} size="md" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">Vendedor</p>
-            <p className="text-[10px] text-gray-400 truncate">Plan Gratuito</p>
+            <p className="text-sm font-medium text-gray-900 truncate">{userName}</p>
+            <p className="text-[10px] text-gray-400 truncate">{userEmail}</p>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8 text-gray-400 hover:text-gray-600">
+                <Settings className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem className="text-xs text-gray-500" disabled>
+                {session?.user?.role === 'admin' ? '👑 Administrador' : '👤 Vendedor'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => signOut({ callbackUrl: '/' })}
+                className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer"
+              >
+                <LogOut className="size-4 mr-2" />
+                Cerrar Sesión
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>
@@ -117,10 +170,29 @@ function SidebarContent({ activeView, setActiveView, onClose }: { activeView: Vi
 }
 
 export default function Home() {
+  const { data: session, status } = useSession()
   const { activeView, setActiveView } = useCRMStore()
   const [showNewLead, setShowNewLead] = useState(false)
   const isMobile = useIsMobile()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Show auth page if not authenticated
+  if (status === 'loading') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center animate-pulse">
+            <Heart className="size-6 text-white fill-white" />
+          </div>
+          <p className="text-sm text-gray-500">Cargando VidaCRM...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <AuthPage />
+  }
 
   const renderView = () => {
     switch (activeView) {
@@ -136,11 +208,11 @@ export default function Home() {
   }
 
   const activeLabel = navItems.find(n => n.key === activeView)?.label || 'Pipeline'
+  const userName = session?.user?.name || 'Usuario'
 
   if (isMobile) {
     return (
       <div className="h-screen flex flex-col bg-gray-50">
-        {/* Mobile Header */}
         <header className="bg-white border-b px-3 py-2.5 flex items-center gap-2 shrink-0">
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
@@ -153,6 +225,7 @@ export default function Home() {
                 activeView={activeView}
                 setActiveView={setActiveView}
                 onClose={() => setMobileMenuOpen(false)}
+                session={session}
               />
             </SheetContent>
           </Sheet>
@@ -175,10 +248,10 @@ export default function Home() {
             >
               <Plus className="size-4" />
             </Button>
+            <UserAvatar name={userName} />
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="flex-1 overflow-hidden">
           {renderView()}
         </main>
@@ -191,14 +264,11 @@ export default function Home() {
 
   return (
     <div className="h-screen flex bg-gray-50">
-      {/* Desktop Sidebar */}
       <aside className="w-[240px] bg-white border-r flex flex-col shrink-0 shadow-sm">
-        <SidebarContent activeView={activeView} setActiveView={setActiveView} />
+        <SidebarContent activeView={activeView} setActiveView={setActiveView} session={session} />
       </aside>
 
-      {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Desktop Header */}
         <header className="bg-white border-b px-5 py-3 flex items-center gap-4 shrink-0">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-gray-900">{activeLabel}</h2>
@@ -210,7 +280,6 @@ export default function Home() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            {/* Quick View Switcher (for power users) */}
             <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
               {navItems.slice(0, 4).map((item) => {
                 const Icon = item.icon
@@ -237,10 +306,31 @@ export default function Home() {
               <Plus className="size-4 mr-1" />
               Nuevo Lead
             </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-9 rounded-full">
+                  <UserAvatar name={userName} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-medium">{userName}</p>
+                  <p className="text-xs text-gray-500">{session?.user?.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => signOut({ callbackUrl: '/' })}
+                  className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer"
+                >
+                  <LogOut className="size-4 mr-2" />
+                  Cerrar Sesión
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="flex-1 overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
@@ -257,7 +347,6 @@ export default function Home() {
         </main>
       </div>
 
-      {/* Shared Drawers/Dialogs */}
       <LeadDetailDrawer />
       <LeadCreateDialog open={showNewLead} onOpenChange={setShowNewLead} />
     </div>

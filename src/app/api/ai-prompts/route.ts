@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import { requireAuth } from '@/lib/auth-helpers';
 
-// GET /api/ai-prompts - List all AI prompts with filters
+// GET /api/ai-prompts - List all AI prompts (public, no auth needed for read)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -27,9 +28,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/ai-prompts - Create a new AI prompt
+// POST /api/ai-prompts - Create a new AI prompt (requires auth)
 export async function POST(request: NextRequest) {
   try {
+    await requireAuth();
     const body = await request.json();
     const { name, category, promptText, description, isActive } = body;
 
@@ -52,6 +54,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(prompt, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error creating AI prompt:', error);
     return NextResponse.json(
       { error: 'Failed to create AI prompt' },

@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import { requireAuth } from '@/lib/auth-helpers';
 
-// GET /api/interactions - List interactions with filters
+// GET /api/interactions - List interactions for the authenticated user with filters
 export async function GET(request: NextRequest) {
   try {
+    const userId = await requireAuth();
     const { searchParams } = new URL(request.url);
     const leadId = searchParams.get('leadId');
     const type = searchParams.get('type');
 
-    const where: Prisma.InteractionWhereInput = {};
+    const where: Prisma.InteractionWhereInput = { userId };
 
     if (leadId) where.leadId = leadId;
     if (type) where.type = type;
@@ -31,6 +33,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(interactions);
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error fetching interactions:', error);
     return NextResponse.json(
       { error: 'Failed to fetch interactions' },
@@ -42,6 +47,7 @@ export async function GET(request: NextRequest) {
 // POST /api/interactions - Create a new interaction
 export async function POST(request: NextRequest) {
   try {
+    const userId = await requireAuth();
     const body = await request.json();
     const { leadId, type, content, metadata } = body;
 
@@ -52,6 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify the lead belongs to the user
     const lead = await db.lead.findUnique({ where: { id: leadId } });
     if (!lead) {
       return NextResponse.json(
@@ -60,12 +67,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (lead.userId !== userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
     const interaction = await db.interaction.create({
       data: {
         leadId,
         type,
         content,
         metadata,
+        userId,
       },
       include: {
         lead: {
@@ -87,6 +99,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(interaction, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === 'No autorizado') {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
     console.error('Error creating interaction:', error);
     return NextResponse.json(
       { error: 'Failed to create interaction' },

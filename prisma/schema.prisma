@@ -1,5 +1,5 @@
-// CRM Kommo-Inspired - Planes de Salud Argentina
-// Designed for WhatsApp-first sales workflow
+// VidaCRM - Planes de Salud Argentina
+// Multi-user CRM with authentication
 
 generator client {
   provider = "prisma-client-js"
@@ -11,63 +11,125 @@ datasource db {
 }
 
 // ============================================
-// PIPELINE STAGES (Kanban columns)
+// USER - Authentication & Profile
 // ============================================
-model PipelineStage {
-  id                String   @id @default(cuid())
-  name              String   // e.g. "Nuevo Lead", "Contactado", etc.
-  order             Int      // Sort order
-  color             String   @default("#6366f1") // Hex color for the stage
-  objective         String?  // What this stage is for
-  entryCriteria     String?  // When a lead enters this stage
-  exitCriteria      String?  // When a lead moves to next stage
-  suggestedTask     String?  // Suggested task/action at this stage
-  whatsappTemplateKey String? // Key reference to WhatsApp template
-  leads             Lead[]
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String    // bcrypt hashed
+  role          String    @default("user") // admin, user
+  avatar        String?   // URL or initials
+  phone         String?   // User's WhatsApp number
+  isActive      Boolean   @default(true)
+  
+  // Relations - each user has their own CRM data
+  leads         Lead[]
+  pipelineStages PipelineStage[]
+  tasks         Task[]
+  interactions  Interaction[]
+  dailyMetrics  DailyMetric[]
+  
+  // NextAuth required models
+  accounts      Account[]
+  sessions      Session[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 // ============================================
-// LEADS - Core entity
+// NextAuth - Account & Session models
+// ============================================
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// PIPELINE STAGES (Kanban columns) - Per user
+// ============================================
+model PipelineStage {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  order             Int
+  color             String   @default("#22c55e")
+  objective         String?
+  entryCriteria     String?
+  exitCriteria      String?
+  suggestedTask     String?
+  whatsappTemplateKey String?
+  leads             Lead[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@unique([userId, name])
+}
+
+// ============================================
+// LEADS - Core entity (per user)
 // ============================================
 model Lead {
   id              String        @id @default(cuid())
-  firstName       String        // Nombre (required)
-  lastName        String?       // Apellido (optional at start)
-  phone           String        // Teléfono WhatsApp (required)
-  email           String?       // Email (optional)
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName       String
+  lastName        String?
+  phone           String
+  email           String?
   
-  // Source & Channel
-  channel         String        @default("whatsapp") // whatsapp, instagram, facebook, google, referido, otro
-  source          String?       // Specific source detail (ad name, post, etc.)
+  channel         String        @default("whatsapp")
+  source          String?
   
-  // Pipeline
   pipelineStageId String
   pipelineStage   PipelineStage @relation(fields: [pipelineStageId], references: [id])
   
-  // Product & Coverage
-  planInterest    String?       // Plan de interés (e.g. "Plan 2100", "Plan 3100")
-  currentCoverage String?       // Cobertura actual (e.g. "OSDE", "Swiss Medical", "Ninguna")
-  familyGroup     String?       // Grupo familiar info
+  planInterest    String?
+  currentCoverage String?
+  familyGroup     String?
   
-  // Status & Priority
-  status          String        @default("active") // active, won, lost, paused
-  priority        String        @default("medium") // high, medium, low
-  responseStatus  String        @default("pending") // pending, responded, not_responding, conversation_started
+  status          String        @default("active")
+  priority        String        @default("medium")
+  responseStatus  String        @default("pending")
   
-  // Follow-up
-  lastContact     DateTime?     // Último contacto
-  nextFollowUp    DateTime?     // Próximo seguimiento
-  followUpCount   Int           @default(0) // Number of follow-ups sent
+  lastContact     DateTime?
+  nextFollowUp    DateTime?
+  followUpCount   Int           @default(0)
   
-  // Result
-  finalResult     String?       // won, lost_no_interest, lost_price, lost_competition, lost_no_response, other
+  finalResult     String?
+  notes           String?
   
-  // Notes
-  notes           String?       // Observaciones generales
-  
-  // Relationships
   tasks           Task[]
   interactions    Interaction[]
   
@@ -76,16 +138,18 @@ model Lead {
 }
 
 // ============================================
-// TASKS - Follow-ups, calls, reminders
+// TASKS - Per user (via lead)
 // ============================================
 model Task {
   id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   leadId      String
   lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  title       String   // Task title
-  description String?  // Details
-  type        String   @default("follow_up") // follow_up, call, meeting, send_proposal, send_info, reminder, other
-  dueDate     DateTime? // When it's due
+  title       String
+  description String?
+  type        String   @default("follow_up")
+  dueDate     DateTime?
   completed   Boolean  @default(false)
   completedAt DateTime?
   createdAt   DateTime @default(now())
@@ -93,53 +157,57 @@ model Task {
 }
 
 // ============================================
-// INTERACTIONS - History log per lead
+// INTERACTIONS - Per user (via lead)
 // ============================================
 model Interaction {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   leadId    String
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  type      String   // whatsapp_sent, whatsapp_received, call, email, meeting, note, stage_change, task_completed
-  content   String   // Description/content of interaction
-  metadata  String?  // JSON string for extra data (e.g. template used, stage changed from/to)
+  type      String
+  content   String
+  metadata  String?
   createdAt DateTime @default(now())
 }
 
 // ============================================
-// WHATSAPP TEMPLATES
+// WHATSAPP TEMPLATES - Global (shared across users)
 // ============================================
 model WhatsAppTemplate {
   id          String   @id @default(cuid())
-  name        String   // e.g. "primer_contacto", "seguimiento", etc.
-  category    String   // first_contact, follow_up, proposal, closing, reactivation, scheduling
-  formalText  String   // Formal version
-  friendlyText String  // Cercana version
-  briefText   String   // Brief version
+  name        String
+  category    String
+  formalText  String
+  friendlyText String
+  briefText   String
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 // ============================================
-// AI PROMPTS - Pre-built prompts for CRM operation
+// AI PROMPTS - Global (shared across users)
 // ============================================
 model AIPrompt {
   id          String   @id @default(cuid())
-  name        String   // e.g. "resumir_conversacion"
-  category    String   // analysis, follow_up, classification, reactivation, daily_priority
-  promptText  String   // The full prompt text
-  description String?  // What this prompt does
+  name        String
+  category    String
+  promptText  String
+  description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 // ============================================
-// METRICS - Daily snapshot for dashboard
+// METRICS - Per user
 // ============================================
 model DailyMetric {
   id            String   @id @default(cuid())
-  date          DateTime @unique // The date this metric is for
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date          DateTime
   totalLeads    Int      @default(0)
   newLeads      Int      @default(0)
   leadsContacted Int     @default(0)
@@ -150,4 +218,6 @@ model DailyMetric {
   avgResponseDays Float  @default(0)
   conversionRate Float   @default(0)
   createdAt     DateTime @default(now())
+  
+  @@unique([userId, date])
 }
