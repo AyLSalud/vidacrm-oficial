@@ -1,0 +1,153 @@
+// CRM Kommo-Inspired - Planes de Salud Argentina
+// Designed for WhatsApp-first sales workflow
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// PIPELINE STAGES (Kanban columns)
+// ============================================
+model PipelineStage {
+  id                String   @id @default(cuid())
+  name              String   // e.g. "Nuevo Lead", "Contactado", etc.
+  order             Int      // Sort order
+  color             String   @default("#6366f1") // Hex color for the stage
+  objective         String?  // What this stage is for
+  entryCriteria     String?  // When a lead enters this stage
+  exitCriteria      String?  // When a lead moves to next stage
+  suggestedTask     String?  // Suggested task/action at this stage
+  whatsappTemplateKey String? // Key reference to WhatsApp template
+  leads             Lead[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ============================================
+// LEADS - Core entity
+// ============================================
+model Lead {
+  id              String        @id @default(cuid())
+  firstName       String        // Nombre (required)
+  lastName        String?       // Apellido (optional at start)
+  phone           String        // Teléfono WhatsApp (required)
+  email           String?       // Email (optional)
+  
+  // Source & Channel
+  channel         String        @default("whatsapp") // whatsapp, instagram, facebook, google, referido, otro
+  source          String?       // Specific source detail (ad name, post, etc.)
+  
+  // Pipeline
+  pipelineStageId String
+  pipelineStage   PipelineStage @relation(fields: [pipelineStageId], references: [id])
+  
+  // Product & Coverage
+  planInterest    String?       // Plan de interés (e.g. "Plan 2100", "Plan 3100")
+  currentCoverage String?       // Cobertura actual (e.g. "OSDE", "Swiss Medical", "Ninguna")
+  familyGroup     String?       // Grupo familiar info
+  
+  // Status & Priority
+  status          String        @default("active") // active, won, lost, paused
+  priority        String        @default("medium") // high, medium, low
+  responseStatus  String        @default("pending") // pending, responded, not_responding, conversation_started
+  
+  // Follow-up
+  lastContact     DateTime?     // Último contacto
+  nextFollowUp    DateTime?     // Próximo seguimiento
+  followUpCount   Int           @default(0) // Number of follow-ups sent
+  
+  // Result
+  finalResult     String?       // won, lost_no_interest, lost_price, lost_competition, lost_no_response, other
+  
+  // Notes
+  notes           String?       // Observaciones generales
+  
+  // Relationships
+  tasks           Task[]
+  interactions    Interaction[]
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// ============================================
+// TASKS - Follow-ups, calls, reminders
+// ============================================
+model Task {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  title       String   // Task title
+  description String?  // Details
+  type        String   @default("follow_up") // follow_up, call, meeting, send_proposal, send_info, reminder, other
+  dueDate     DateTime? // When it's due
+  completed   Boolean  @default(false)
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// INTERACTIONS - History log per lead
+// ============================================
+model Interaction {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String   // whatsapp_sent, whatsapp_received, call, email, meeting, note, stage_change, task_completed
+  content   String   // Description/content of interaction
+  metadata  String?  // JSON string for extra data (e.g. template used, stage changed from/to)
+  createdAt DateTime @default(now())
+}
+
+// ============================================
+// WHATSAPP TEMPLATES
+// ============================================
+model WhatsAppTemplate {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "primer_contacto", "seguimiento", etc.
+  category    String   // first_contact, follow_up, proposal, closing, reactivation, scheduling
+  formalText  String   // Formal version
+  friendlyText String  // Cercana version
+  briefText   String   // Brief version
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// AI PROMPTS - Pre-built prompts for CRM operation
+// ============================================
+model AIPrompt {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "resumir_conversacion"
+  category    String   // analysis, follow_up, classification, reactivation, daily_priority
+  promptText  String   // The full prompt text
+  description String?  // What this prompt does
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// METRICS - Daily snapshot for dashboard
+// ============================================
+model DailyMetric {
+  id            String   @id @default(cuid())
+  date          DateTime @unique // The date this metric is for
+  totalLeads    Int      @default(0)
+  newLeads      Int      @default(0)
+  leadsContacted Int     @default(0)
+  leadsWon      Int      @default(0)
+  leadsLost     Int      @default(0)
+  tasksCompleted Int     @default(0)
+  tasksPending  Int      @default(0)
+  avgResponseDays Float  @default(0)
+  conversionRate Float   @default(0)
+  createdAt     DateTime @default(now())
+}
