@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  allowedDevOrigins: [
+    // Allow all space-z.ai preview domains
+    ".space-z.ai",
+    "localhost",
+  ],
 };
 
 export default nextConfig;
