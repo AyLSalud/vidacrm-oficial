@@ -1,0 +1,225 @@
+// VidaCRM - Planes de Salud Argentina
+// PRODUCTION schema - Uses PostgreSQL for cloud deployment
+// This file is used by build scripts (vercel-build, Docker, etc.)
+// DO NOT edit models here - edit schema.prisma (SQLite) instead and copy changes here
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER - Authentication & Profile
+// ============================================
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String    // bcrypt hashed
+  role          String    @default("user") // admin, user
+  avatar        String?   // URL or initials
+  phone         String?   // User's WhatsApp number
+  isActive      Boolean   @default(true)
+  
+  // Relations - each user has their own CRM data
+  leads         Lead[]
+  pipelineStages PipelineStage[]
+  tasks         Task[]
+  interactions  Interaction[]
+  dailyMetrics  DailyMetric[]
+  
+  // NextAuth required models
+  accounts      Account[]
+  sessions      Session[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============================================
+// NextAuth - Account & Session models
+// ============================================
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// PIPELINE STAGES (Kanban columns) - Per user
+// ============================================
+model PipelineStage {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  order             Int
+  color             String   @default("#22c55e")
+  objective         String?
+  entryCriteria     String?
+  exitCriteria      String?
+  suggestedTask     String?
+  whatsappTemplateKey String?
+  leads             Lead[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@unique([userId, name])
+}
+
+// ============================================
+// LEADS - Core entity (per user)
+// ============================================
+model Lead {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName       String
+  lastName        String?
+  phone           String
+  email           String?
+  
+  channel         String        @default("whatsapp")
+  source          String?
+  
+  pipelineStageId String
+  pipelineStage   PipelineStage @relation(fields: [pipelineStageId], references: [id])
+  
+  planInterest    String?
+  currentCoverage String?
+  familyGroup     String?
+  
+  status          String        @default("active")
+  priority        String        @default("medium")
+  responseStatus  String        @default("pending")
+  
+  lastContact     DateTime?
+  nextFollowUp    DateTime?
+  followUpCount   Int           @default(0)
+  
+  finalResult     String?
+  notes           String?
+  
+  tasks           Task[]
+  interactions    Interaction[]
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// ============================================
+// TASKS - Per user (via lead)
+// ============================================
+model Task {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  type        String   @default("follow_up")
+  dueDate     DateTime?
+  completed   Boolean  @default(false)
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// INTERACTIONS - Per user (via lead)
+// ============================================
+model Interaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String
+  content   String
+  metadata  String?
+  createdAt DateTime @default(now())
+}
+
+// ============================================
+// WHATSAPP TEMPLATES - Global (shared across users)
+// ============================================
+model WhatsAppTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  category    String
+  formalText  String
+  friendlyText String
+  briefText   String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// AI PROMPTS - Global (shared across users)
+// ============================================
+model AIPrompt {
+  id          String   @id @default(cuid())
+  name        String
+  category    String
+  promptText  String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// METRICS - Per user
+// ============================================
+model DailyMetric {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date          DateTime
+  totalLeads    Int      @default(0)
+  newLeads      Int      @default(0)
+  leadsContacted Int     @default(0)
+  leadsWon      Int      @default(0)
+  leadsLost     Int      @default(0)
+  tasksCompleted Int     @default(0)
+  tasksPending  Int      @default(0)
+  avgResponseDays Float  @default(0)
+  conversionRate Float   @default(0)
+  createdAt     DateTime @default(now())
+  
+  @@unique([userId, date])
+}

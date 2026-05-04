@@ -3,9 +3,12 @@ import { db } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 // POST /api/seed - Seed the database with example data (includes admin user)
+// Works with both SQLite (dev) and PostgreSQL (prod)
+// IMPORTANT: This will DELETE all existing data before seeding!
 export async function POST() {
   try {
     // Clean existing data (order matters due to foreign keys)
+    // Works on both SQLite and PostgreSQL - Prisma abstracts the differences
     await db.interaction.deleteMany();
     await db.task.deleteMany();
     await db.lead.deleteMany();
