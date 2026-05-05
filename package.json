@@ -11,6 +11,7 @@
     "postinstall": "prisma generate",
     "vercel-build": "prisma generate --schema prisma/schema.prod.prisma && next build",
     "db:push": "prisma db push",
+    "db:push": "prisma db push",
     "db:push:prod": "prisma db push --schema prisma/schema.prod.prisma",
     "db:generate": "prisma generate",
     "db:generate:prod": "prisma generate --schema prisma/schema.prod.prisma",
