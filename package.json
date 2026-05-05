@@ -4,22 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
-    "build": "prisma generate && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
-    "build:prod": "prisma generate --schema prisma/schema.prod.prisma && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+    "build": "prisma generate --schema prisma/schema.prod.prisma && next build",
+    "vercel-build": "prisma generate --schema prisma/schema.prod.prisma && next build",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma generate --schema prisma/schema.prod.prisma && next build",
-    "db:push": "prisma db push",
-    "db:push": "prisma db push",
     "db:push:prod": "prisma db push --schema prisma/schema.prod.prisma",
-    "db:generate": "prisma generate",
-    "db:generate:prod": "prisma generate --schema prisma/schema.prod.prisma",
-    "db:migrate": "prisma migrate dev",
-    "db:migrate:deploy": "prisma migrate deploy",
-    "db:migrate:deploy:prod": "prisma migrate deploy --schema prisma/schema.prod.prisma",
-    "db:migrate:create": "prisma migrate dev --name",
-    "db:reset": "prisma migrate reset",
     "db:seed": "curl -X POST http://localhost:3000/api/seed"
   },
   "dependencies": {
@@ -103,4 +93,5 @@
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"
   }
+}
 }
